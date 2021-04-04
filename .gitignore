@@ -130,3 +130,6 @@ dmypy.json
 
 # Jetbrains ideas
 .idea
+
+# Data
+data
