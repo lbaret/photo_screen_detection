@@ -15,6 +15,10 @@ import torch.optim as optim
 from sklearn.metrics import accuracy_score
 
 import numpy as np
+import matplotlib.pyplot as plt
+
+import warnings
+warnings.filterwarnings('ignore')
 # -
 
 # # Data loading
@@ -40,6 +44,10 @@ train_indexes = np.random.choice(all_indexes, size=train_size, replace=False)
 all_indexes = np.setdiff1d(all_indexes, train_indexes)
 valid_indexes = np.random.choice(all_indexes, size=valid_size, replace=False)
 test_indexes = np.setdiff1d(all_indexes, valid_indexes)
+
+np.random.shuffle(train_indexes)
+np.random.shuffle(valid_indexes)
+np.random.shuffle(test_indexes)
 
 train_subset = Subset(dataset, train_indexes)
 valid_subset = Subset(dataset, valid_indexes)
@@ -110,6 +118,7 @@ def train(model, optimizer, loss, train_loader, epochs=100, scheduler=None, vali
             # Machine is learning
             err.backward()
             optimizer.step()
+            optimizer.zero_grad()
 
             # Clean GPU
             if gpu is not None:
@@ -120,10 +129,12 @@ def train(model, optimizer, loss, train_loader, epochs=100, scheduler=None, vali
                 torch.cuda.empty_cache()
             
             all_losses.append(err)
-            all_predictions.append((predictions >= 0.5) * 1)
+            labels = (F.sigmoid(predictions) >= 0.5) * 1
+            all_predictions.append(labels)
             all_targets.append(targets)
+            accuracy_batch = accuracy_score(targets, labels)
             
-            print(f'\rBatch : {i+1} / {len(train_loader)}', end='')
+            print(f'\rBatch : {i+1} / {len(train_loader)} - Accuracy : {accuracy_batch*100:.2f}% - Loss : {err:.2e}', end='')
         
         all_predictions = torch.hstack(all_predictions)
         all_targets = torch.hstack(all_targets)
@@ -163,7 +174,7 @@ def valid(model, loss, valid_loader, gpu):
         all_losses = []
         all_predictions = []
         all_targets = []
-        for inputs, targets in valid_loader:
+        for i, (inputs, targets) in enumerate(valid_loader):
             if gpu is not None:
                 inputs = inputs.cuda(gpu)
                 targets = targets.float().cuda(gpu)
@@ -181,8 +192,10 @@ def valid(model, loss, valid_loader, gpu):
                 predictions = predictions.cpu()
                 torch.cuda.empty_cache()
                 
-            all_predictions.append((predictions >= 0.5) * 1)
+            all_predictions.append((F.sigmoid(predictions) >= 0.5) * 1)
             all_targets.append(targets)
+            
+            print(f'\rValid batch : {i+1} / {len(valid_loader)}', end='')
         
         all_losses = torch.hstack(all_losses)
         all_predictions = torch.hstack(all_predictions)
@@ -200,7 +213,7 @@ def test(model, loss, test_loader, gpu):
         all_losses = []
         all_predictions = []
         all_targets = []
-        for inputs, targets in test_loader:
+        for i, (inputs, targets) in enumerate(test_loader):
             if gpu is not None:
                 inputs = inputs.cuda(gpu)
                 targets = targets.float().cuda(gpu)
@@ -215,10 +228,13 @@ def test(model, loss, test_loader, gpu):
                 err = err.cpu()
                 inputs = inputs.cpu()
                 targets = targets.cpu()
+                predictions = predictions.cpu()
                 torch.cuda.empty_cache()
                 
-            all_predictions.append((predictions >= 0.5) * 1)
+            all_predictions.append((F.sigmoid(predictions) >= 0.5) * 1)
             all_targets.append(targets)
+            
+            print(f'\rTest batch : {i+1} / {len(test_loader)}', end='')
             
         all_losses = torch.vstack(all_losses)
         all_predictions = torch.hstack(all_predictions)
@@ -240,21 +256,79 @@ def predict(model, tensor_data, gpu):
     
     with torch.no_grad():
         predictions = model(tensor_data).squeeze()
-    return (predictions >= 0.5) * 1
+    return (F.sigmoid(predictions) >= 0.5) * 1
 
 
 # # Entrainement
 
+# ## Overfitting
+
 # +
-learning_rate = 0.01
+learning_rate = 0.1
 
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 loss = nn.BCEWithLogitsLoss()
 
 # Test avec le test set (bizarre me direz vous ...)
-hist = train(model, optimizer, loss, train_loader=test_loader, epochs=100, gpu=0)
+hist = train(model, optimizer, loss, train_loader=test_loader, epochs=10, gpu=0)
 # -
 
-# **Le réseau ne semble pas apprendre ...**
+fig, axs = plt.subplots(2, figsize=(40, 20))
+axs[0].plot(hist[0], color='b', label='Accuracy')
+axs[1].plot(hist[1], color='r', label='Loss')
+
+# Un doute sur la pertinence de son apprentissage ...
+
+# ## (vrai) finetuning
+
+# +
+model = resnet18(pretrained=True)
+
+# Remplacement de la dernière couche
+model.fc = nn.Linear(in_features=512, out_features=1)
+
+# Gel des couches
+for name, param in model.named_parameters():
+    if 'fc' not in name:
+        param.requires_grad = False
+        
+# Oublier de remettre la dernière couche haha
+
+
+learning_rate = 0.1
+epochs = 10
+
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+loss = nn.BCEWithLogitsLoss()
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+
+# Test avec le test set (bizarre me direz vous ...)
+hist = train(model, optimizer, loss, train_loader=train_loader, valid_loader=valid_loader, epochs=epochs, gpu=0, scheduler=scheduler)
+
+# +
+fig, axs = plt.subplots(2, figsize=(40, 20))
+axs[0].plot(hist[0], c='blue', label='Train')
+axs[0].plot(hist[2], c='red', label='Valid')
+axs[0].set_title('Accuracy', fontsize=20)
+axs[1].plot(hist[1], c='blue', label='Train')
+axs[1].plot(hist[3], c='red', label='Valid')
+axs[1].set_title('Loss', fontsize=20)
+
+axs[0].legend()
+axs[1].legend();
+# -
+
+# ## Test
+
+hist_test = test(model, loss, test_loader, 0)
+f'Exactitude en test : {hist_test[1]*100:.2f}%'
+
+
+
+
+
+
+
+
 
 
