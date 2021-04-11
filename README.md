@@ -1,6 +1,10 @@
 # Projet de détection de capture d’écran
 
-![photo](https://github.com/lbaret/photo_screen_detection/blob/master/img/example_photo.jpg) vs. ![screenshot](https://github.com/lbaret/photo_screen_detection/blob/master/img/example_screenshot.png)
+![photo](https://github.com/lbaret/photo_screen_detection/blob/master/img/example_photo.jpg) 
+
+**vs.** 
+
+![screenshot](https://github.com/lbaret/photo_screen_detection/blob/master/img/example_screenshot.png)
 
 ## Partie Machine Learning
 Ce projet a pour premier but de classifier des images en deux catégories : 
