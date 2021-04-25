@@ -12,7 +12,7 @@ from torch.utils.data import Subset, DataLoader
 import torch.nn.functional as F
 import torch.optim as optim
 
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,10 +29,10 @@ warnings.filterwarnings('ignore')
 # À définir manuellement
 train_rate = 0.8
 valid_rate = 0.1
-batch_size = 4
+batch_size = 8
 
 trans = transforms.Compose([
-    transforms.Resize(size=(1500, 1500)),
+    transforms.Resize(size=(500, 500)),
     transforms.ToTensor()
 ])
 dataset = ImageFolder(DATA_PATH, transform=trans)
@@ -59,35 +59,9 @@ test_subset = Subset(dataset, test_indexes)
 train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=False)
 valid_loader = DataLoader(valid_subset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_subset, batch_size=batch_size, shuffle=False)
+
+
 # -
-
-# # Baseline : Resnet-18
-
-model = resnet18(pretrained=True)
-
-# On connaît notre pattern :
-# 1. On supprime la dernière couche linéaire de classification.
-# 2. On gèle les couches
-# 3. On ajoute la dernière couche linéaire avec le bon nombre de classes (ici 2).
-
-model
-
-# La dernière couche du modèle (de classification), est nommée 'fc', c’est donc cette dernière que nous allons modifier et faire réapprendre.
-
-model.fc = nn.Linear(in_features=512, out_features=1)
-
-# 👍
-#
-# On va régler ce problème sous forme de régression logistique. On va prédire le pourcentage de chance d’appartenir à la classe 1, soit la classe *screenshot*.
-
-model
-
-for name, param in model.named_parameters():
-    if 'fc' not in name:
-        param.requires_grad = False
-
-
-# Excellent ! Nos couches sont gelées ! 🙌
 
 # # Fonctions nécessaires
 
@@ -115,7 +89,7 @@ def train(model, optimizer, loss, train_loader, epochs=100, scheduler=None, vali
                 inputs = inputs.cuda(gpu)
                 targets = targets.float().cuda(gpu)
             
-            predictions = model(inputs).squeeze()
+            predictions = model(inputs).squeeze(dim=1)
             err = loss(predictions, targets)
 
             # Machine is learning
@@ -135,8 +109,8 @@ def train(model, optimizer, loss, train_loader, epochs=100, scheduler=None, vali
                 torch.cuda.empty_cache()
             
             all_losses.append(err)
-            all_predictions.append(labels)
-            all_targets.append(targets)
+            all_predictions.append(labels.unsqueeze(-1))
+            all_targets.append(targets.unsqueeze(-1))
             accuracy_batch = accuracy_score(targets, labels)
             
             print(f'\rBatch : {i+1} / {len(train_loader)} - Accuracy : {accuracy_batch*100:.2f}% - Loss : {err:.2e}', end='')
@@ -186,7 +160,7 @@ def valid(model, loss, valid_loader, gpu):
                 inputs = inputs.cuda(gpu)
                 targets = targets.float().cuda(gpu)
 
-            predictions = model(inputs).squeeze()
+            predictions = model(inputs).squeeze(dim=1)
             err = loss(predictions, targets)
 
             all_losses.append(err.detach().cpu())
@@ -201,8 +175,8 @@ def valid(model, loss, valid_loader, gpu):
                 labels = labels.cpu()
                 torch.cuda.empty_cache()
                 
-            all_predictions.append(labels)
-            all_targets.append(targets)
+            all_predictions.append(labels.unsqueeze(-1))
+            all_targets.append(targets.unsqueeze(-1))
             
             print(f'\rValid batch : {i+1} / {len(valid_loader)}', end='')
         
@@ -227,7 +201,7 @@ def test(model, loss, test_loader, gpu):
                 inputs = inputs.cuda(gpu)
                 targets = targets.float().cuda(gpu)
 
-            predictions = model(inputs).squeeze()
+            predictions = model(inputs).squeeze(dim=1)
             err = loss(predictions, targets)
 
             all_losses.append(err.detach().cpu())
@@ -240,8 +214,8 @@ def test(model, loss, test_loader, gpu):
                 predictions = predictions.cpu()
                 torch.cuda.empty_cache()
                 
-            all_predictions.append((F.sigmoid(predictions) >= 0.5) * 1)
-            all_targets.append(targets)
+            all_predictions.append(((F.sigmoid(predictions) >= 0.5) * 1).unsqueeze(-1))
+            all_targets.append(targets.unsqueeze(-1))
             
             print(f'\rTest batch : {i+1} / {len(test_loader)}', end='')
             
@@ -256,17 +230,76 @@ def test(model, loss, test_loader, gpu):
 # ## Prédiction
 
 # Input dim : (batch_size, chanels, height, width)
-def predict(model, tensor_data, gpu):
+def predict(model, dataloader=None, tensor_data=None, gpu=None):
     model.training = False
     
     if gpu is not None:
         model = model.cuda(gpu)
-        tensor_data = tensor_data.cuda(gpu)
     
-    with torch.no_grad():
-        predictions = model(tensor_data).squeeze()
-    return (F.sigmoid(predictions) >= 0.5) * 1
+    if dataloader is not None:
+        all_predictions = []
+        all_targets = []
+        with torch.no_grad():
+            for i, (inputs, targets) in enumerate(dataloader):
+                if gpu is not None:
+                    inputs = inputs.cuda(gpu)
+                    targets = targets.float().cuda(gpu)
 
+                predictions = model(inputs).squeeze(dim=1)
+
+                # Clean GPU
+                if gpu is not None:
+                    inputs = inputs.cpu()
+                    targets = targets.cpu()
+                    predictions = predictions.cpu()
+                    torch.cuda.empty_cache()
+
+                all_predictions.append(((F.sigmoid(predictions) >= 0.5) * 1).unsqueeze(-1))
+                all_targets.append(targets.unsqueeze(-1))
+
+                print(f'\rPredict batch : {i+1} / {len(dataloader)}', end='')
+
+            all_predictions = torch.vstack(all_predictions)
+            all_targets = torch.vstack(all_targets)
+        return all_predictions, all_targets
+    
+    if tensor_data is not None:
+        if gpu is not None:
+            tensor_data = tensor_data.cuda(gpu)
+        
+        with torch.no_grad():
+            predictions = model(tensor_data).squeeze()
+        return (F.sigmoid(predictions) >= 0.5) * 1
+    
+    return None
+
+
+# # Baseline : Resnet-18
+
+model = resnet18(pretrained=True)
+
+# On connaît notre pattern :
+# 1. On supprime la dernière couche linéaire de classification.
+# 2. On gèle les couches
+# 3. On ajoute la dernière couche linéaire avec le bon nombre de classes (ici 2).
+
+model
+
+# La dernière couche du modèle (de classification), est nommée 'fc', c’est donc cette dernière que nous allons modifier et faire réapprendre.
+
+model.fc = nn.Linear(in_features=512, out_features=1)
+
+# 👍
+#
+# On va régler ce problème sous forme de régression logistique. On va prédire le pourcentage de chance d’appartenir à la classe 1, soit la classe *screenshot*.
+
+model
+
+for name, param in model.named_parameters():
+    if 'fc' not in name:
+        param.requires_grad = False
+
+# Excellent ! Nos couches sont gelées ! 🙌
 
 # # Entrainement
 
@@ -337,6 +370,63 @@ f'Exactitude en test : {hist_test[1]*100:.2f}%'
 model_vgg = vgg16(pretrained=True)
 
 model_vgg
+
+model_vgg.classifier[6] = nn.Linear(in_features=4096, out_features=1)
+
+# La couche de sortie va chercher à ressortir la probabilité d’appartenance à la classe 1 (soit les screenshots) ✅.
+
+for param in model_vgg.features.parameters():
+    param.requires_grad = False
+
+# Les couches d’extraction de features sont gelées 🥶.
+
+# # Entrainement
+
+# ## Overfitting
+
+# +
+learning_rate = 0.1
+
+optimizer = optim.Adam(model_vgg.parameters(), lr=learning_rate)
+loss = nn.BCEWithLogitsLoss()
+
+# Test avec le test set (bizarre me direz vous ...)
+hist = train(model_vgg, optimizer, loss, train_loader=test_loader, epochs=5, gpu=0)
+# -
+
+# C’est génial, il overfit, donc le réseau est potentiellement adapté à nos données.
+
+# ## Finetuning du VGG 16
+
+# +
+model_vgg.classifier[6] = nn.Linear(in_features=4096, out_features=1)
+
+for param in model_vgg.features.parameters():
+    param.requires_grad = False
+    
+optimizer = optim.Adam(model_vgg.parameters(), lr=learning_rate)
+loss = nn.BCEWithLogitsLoss()
+
+# Test avec le test set (bizarre me direz vous ...)
+hist = train(model_vgg, optimizer, loss, train_loader=train_loader, valid_loader=valid_loader, epochs=10, gpu=0)
+# -
+
+# # Test
+
+hist_test = test(model_vgg, loss, test_loader, 0)
+f'Exactitude en test : {hist_test[1]*100:.2f}%'
+
+# Les résultats sont excellentes, le modèle généralise très bien le problème 💯.
+
+# # Matrice de confusion - VGG 16
+
+y_train_pred, y_train = predict(model_vgg, dataloader=train_loader, gpu=0)
+
+train_confusion = confusion_matrix(y_train.squeeze().numpy(), y_train_pred.squeeze().numpy())
+
+train_confusion
+
+# Génial ! Belle matrice de confusion 🤩.
 
 
 
