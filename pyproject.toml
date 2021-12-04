@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "photo_screen_detection"
+version = "0.1.0"
+description = "Classifier of programming screenshot/photo"
+license = "Proprietary"
+authors = ["Loïc Baret <baret.loic.1@gmail.com>"]
+readme = "README.md"
+keywords = [
+    "screenshot", "photo", "discriminant", "classifier", "computer vision"
+]
+packages = [
+    { include = "photo_screen_detection", from = "." }
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+notebook = "*"
+click = "*"
+
+[tool.poetry.dev-dependencies]
+ipykernel = "*"
