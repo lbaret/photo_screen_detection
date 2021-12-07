@@ -47,15 +47,22 @@ Vous avez la possibilité de suivre l’évolution du projet en direct en cliqua
 de l’Intelligence Artificielle en général*
 
 ## Organisation du code
-- **Projet**
-    - *eda.py* : rapide affichage des données que nous possédons.
-    - *baseline.py* : on utilise des modèles ayant fais leur preuve dans des projets similaires.
-    - *garbage.py* : fichier pour tester des morceaux de codes (foure tout).
-    - **config**
-        - *\_\_init\_\_.py* : configuration des chemins d’accès.
-    - **data** : répertoire contenant les données.
-        - **photo**
-        - **screenshot**
+```
+|-- Projet - racine
+|  |-- photo_screen_detection : module 
+|  |  |-- notebooks
+|  |  |  |-- eda.py : rapide affichage des données que nous possédons.
+|        |-- baseline.py : on utilise des modèles ayant fais leur preuve dans des projets similaires.
+|        |-- garbage.py : fichier pour tester des morceaux de codes (foure tout).
+|  |  |-- config
+|  |  |  |-- paths.py : contient les différents chemins d'accès
+|  |-- data : répertoire contenant les données.
+|  |  |-- photo
+|  |  |-- screenshot
+|  |-- img : répertoire contenant les images affichés dans le README.md
+|-- pyproject.toml : fichier de configuration Poetry
+|-- poetry.lock : fichier généré pour la reproduction de l'environnement virtuel Poetry
+```
 
 ## Avancées
 Pour l’instant, j’ai simplement implémenté et ajusté un modèle [ResNet-18](https://arxiv.org/abs/1512.03385) pré-entrainé.
