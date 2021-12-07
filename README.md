@@ -52,8 +52,8 @@ de l’Intelligence Artificielle en général*
 |  |-- photo_screen_detection : module 
 |  |  |-- notebooks
 |  |  |  |-- eda.py : rapide affichage des données que nous possédons.
-|        |-- baseline.py : on utilise des modèles ayant fais leur preuve dans des projets similaires.
-|        |-- garbage.py : fichier pour tester des morceaux de codes (foure tout).
+|  |  |  |-- baseline.py : on utilise des modèles ayant fais leur preuve dans des projets similaires.
+|  |  |  |-- garbage.py : fichier pour tester des morceaux de codes (foure tout).
 |  |  |-- config
 |  |  |  |-- paths.py : contient les différents chemins d'accès
 |  |-- data : répertoire contenant les données.
