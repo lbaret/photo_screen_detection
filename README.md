@@ -6,6 +6,27 @@
 
 ![screenshot](/img/example_screenshot.png)
 
+## Environnement Python
+
+### Installation
+
+#### Pyenv
+```shell
+pyenv install 3.9.6
+pyenv local 3.9.6
+```
+
+#### Poetry
+```shell
+poetry install
+```
+
+### Usage
+```shell
+poetry shell
+poetry run
+```
+
 ## Partie Machine Learning
 Ce projet a pour premier but de classifier des images en deux catégories : 
 1. Screenshot

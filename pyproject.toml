@@ -14,8 +14,13 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.9"
+numpy = "*"
 notebook = "*"
 click = "*"
+torch = "*"
+torchvision = "*"
+scikit-learn = "*"
+matplotlib = "*"
 
 [tool.poetry.dev-dependencies]
 ipykernel = "*"
