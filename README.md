@@ -67,7 +67,7 @@ de l’Intelligence Artificielle en général*
 ## Avancées
 Pour l’instant, j’ai simplement implémenté et ajusté un modèle [ResNet-18](https://arxiv.org/abs/1512.03385) pré-entrainé.
 
-## Idées
+## Idées :bulb:
 La grande ligne directrice est :
 1. Utiliser des réseaux pré-entrainés.
 2. Construire un réseau de neurones basé sur des couches convolutionnelles.
